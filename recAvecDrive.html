@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Camera Recording</title>
+  </head>
+  <body>
+    <video id="videoElement" width="640" height="480" autoplay></video>
+    <button id="startRecording">Start Recording</button>
+    <button id="stopRecording" disabled>Stop Recording</button>
+    <video id="recordedVideo" width="640" height="480" controls></video>
+
+    <script src="https://apis.google.com/js/api.js"></script>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const videoElement = document.getElementById("videoElement");
+        const startRecordingButton = document.getElementById("startRecording");
+        const stopRecordingButton = document.getElementById("stopRecording");
+        const recordedVideo = document.getElementById("recordedVideo");
+
+        let mediaRecorder;
+        let recordedChunks = [];
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+          .then(function (stream) {
+            videoElement.srcObject = stream;
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.ondataavailable = function (event) {
+              if (event.data.size > 0) {
+                recordedChunks.push(event.data);
+              }
+            };
+
+            mediaRecorder.onstop = function () {
+              const recordedBlob = new Blob(recordedChunks, { type: "video/webm" });
+              recordedVideo.src = URL.createObjectURL(recordedBlob);
+              recordedVideo.controls = true;
+
+              // Utilisez l'API Google Drive pour télécharger la vidéo
+              uploadToDrive(recordedBlob);
+            };
+          })
+          .catch(function (error) {
+            console.error("Error accessing camera:", error);
+          });
+
+        startRecordingButton.addEventListener("click", function () {
+          recordedChunks = [];
+          mediaRecorder.start();
+          startRecordingButton.disabled = true;
+          stopRecordingButton.disabled = false;
+        });
+
+        stopRecordingButton.addEventListener("click", function () {
+          mediaRecorder.stop();
+          startRecordingButton.disabled = false;
+          stopRecordingButton.disabled = true;
+        });
+
+        function uploadToDrive(blob) {
+          gapi.load('client', function () {
+            gapi.client.init({
+              apiKey: 'AIzaSyAyKyuC_JcWmZ6yjfAdy52ICfAnKiDF4MU',
+              clientId: '28675319085-0kq69t97g3nkcrk1bck2qhrtt4ho9upc.apps.googleusercontent.com',
+              discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
+              scope: 'https://www.googleapis.com/auth/drive.file',
+            }).then(function () {
+              gapi.client.drive.files.create({
+                resource: {
+                  name: 'recorded-video.webm',
+                  mimeType: 'video/webm',
+                },
+                media: {
+                  body: blob,
+                },
+              }).then(function (response) {
+                console.log('File ID:', response.result.id);
+              }, function (error) {
+                console.error('Error uploading to Drive:', error);
+              });
+            });
+          });
+        }
+      });
+    </script>
+  </body>
+</html>
